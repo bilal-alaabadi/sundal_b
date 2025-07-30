@@ -9,7 +9,7 @@ require("dotenv").config();
 
 const THAWANI_API_KEY = process.env.THAWANI_API_KEY; 
 const THAWANI_API_URL = process.env.THAWANI_API_URL;
-const publish_key = "HGvTMLDssJghr9tlN9gr4DVYt0qyBy";
+const publish_key = "S4ODqAjrpkr5vKavsbELkGZYLHvOys";
 
 const app = express();
 app.use(cors({ origin: "https://www.henna-burgund.shop" }));
