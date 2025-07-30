@@ -13,7 +13,7 @@ const OrderSchema = new mongoose.Schema(
       },
     ],
     amount: { type: Number, required: true },
-    shippingFee: { type: Number, required: true, default: 2 },
+shippingFee: { type: Number, required: true, default: 0 }, // تغيير القيمة الافتراضية إلى 0
     customerName: { type: String, required: true },
     customerPhone: { type: String, required: true },
     country: { type: String, required: true },

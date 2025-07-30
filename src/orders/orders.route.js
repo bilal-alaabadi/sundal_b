@@ -19,7 +19,7 @@ app.use(express.json());
 router.post("/create-checkout-session", async (req, res) => {
     const { products, email, customerName, customerPhone, country, wilayat, description } = req.body;
 
-    const shippingFee = country === 'الإمارات' ?4:2; // رسوم الشحن الثابتة
+    const shippingFee = country === 'الإمارات' ?0.1:0.1; // رسوم الشحن الثابتة
 
     if (!Array.isArray(products) || products.length === 0) {
         return res.status(400).json({ error: "Invalid or empty products array" });
