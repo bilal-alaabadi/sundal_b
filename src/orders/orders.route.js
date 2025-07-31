@@ -19,14 +19,13 @@ app.use(express.json());
 router.post("/create-checkout-session", async (req, res) => {
     const { products, email, customerName, customerPhone, country, wilayat, description } = req.body;
 
-    const shippingFee = country === 'الإمارات' ? 4 : 2 ; // رسوم الشحن الثابتة
+    const shippingFee = country === 'الإمارات' ? 4 : 2;
 
     if (!Array.isArray(products) || products.length === 0) {
         return res.status(400).json({ error: "Invalid or empty products array" });
     }
 
     try {
-        // حساب المبلغ الإجمالي مع رسوم الشحن
         const subtotal = products.reduce((total, product) => total + (product.price * product.quantity), 0);
         const totalAmount = subtotal + shippingFee;
 
@@ -34,22 +33,34 @@ router.post("/create-checkout-session", async (req, res) => {
             name: product.name,
             productId: product._id,
             quantity: product.quantity,
-            unit_amount: Math.round(product.price * 1000), // Convert to baisa
+            unit_amount: Math.round(product.price * 1000), // السعر بالبيسة
         }));
 
-        // إضافة رسوم الشحن كعنصر منفصل
+        // رسوم الشحن
         lineItems.push({
             name: "رسوم الشحن",
             quantity: 1,
-            unit_amount: Math.round(shippingFee * 1000), // Convert to baisa
+            unit_amount: Math.round(shippingFee * 1000),
         });
 
+        const nowId = Date.now().toString(); // لضمان التناسق بين client_reference_id و internal_order_id
+
         const data = {
-            client_reference_id: Date.now().toString(),
+            client_reference_id: nowId,
             mode: "payment",
             products: lineItems,
-            success_url: "https://www.henna-burgund.shop/SuccessRedirect?client_reference_id="+Date.now().toString(),
-            cancel_url: "https://www.henna-burgund.shop/cancel",   
+            success_url: "https://www.henna-burgund.shop/SuccessRedirect?client_reference_id=" + nowId,
+            cancel_url: "https://www.henna-burgund.shop/cancel",
+            metadata: {
+                customer_name: customerName,
+                customer_phone: customerPhone,
+                email: email || "غير محدد",
+                country: country,
+                wilayat: wilayat,
+                description: description || "لا يوجد وصف",
+                internal_order_id: nowId,
+                source: "mern-backend"
+            }
         };
 
         const response = await axios.post(`${THAWANI_API_URL}/checkout/session`, data, {
@@ -62,15 +73,14 @@ router.post("/create-checkout-session", async (req, res) => {
         const sessionId = response.data.data.session_id;
         const paymentLink = `https://checkout.thawani.om/pay/${sessionId}?key=${publish_key}`;
 
-        // حفظ الطلب في قاعدة البيانات مع جميع البيانات
         const order = new Order({
             orderId: sessionId,
             products: products.map((product) => ({
                 productId: product._id,
                 quantity: product.quantity,
                 name: product.name,
-                price:product.price,
-                image:product.image,
+                price: product.price,
+                image: product.image,
             })),
             amount: totalAmount,
             shippingFee: shippingFee,
@@ -82,15 +92,16 @@ router.post("/create-checkout-session", async (req, res) => {
             email,
             status: "pending",
         });
-       console.log(order);
+
+        console.log(order);
         await order.save();
 
         res.json({ id: sessionId, paymentLink });
     } catch (error) {
         console.error("Error creating checkout session:", error);
-        res.status(500).json({ 
-            error: "Failed to create checkout session", 
-            details: error.message 
+        res.status(500).json({
+            error: "Failed to create checkout session",
+            details: error.message
         });
     }
 });

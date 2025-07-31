@@ -16,7 +16,7 @@ app.use(cookieParser());
 // Enhanced CORS configuration
 const allowedOrigins = [
   "https://www.henna-burgund.shop",
-  "https://henna-burgund.shop",
+  "https://henna-burgund.shop"
 ];
 
 app.use(cors({
