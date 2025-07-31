@@ -9,7 +9,7 @@ require("dotenv").config();
 
 const THAWANI_API_KEY = process.env.THAWANI_API_KEY; 
 const THAWANI_API_URL = process.env.THAWANI_API_URL;
-const publish_key = "S4ODqAjrpkr5vKavsbELkGZYLHvOys";
+const publish_key = "dSUzzUhfbpjumRIkHPDelGGPNwmp50";
 
 const app = express();
 app.use(cors({ origin: "https://www.henna-burgund.shop" }));
@@ -19,7 +19,7 @@ app.use(express.json());
 router.post("/create-checkout-session", async (req, res) => {
     const { products, email, customerName, customerPhone, country, wilayat, description } = req.body;
 
-    const shippingFee = country === 'الإمارات' ?0.1:0.1; // رسوم الشحن الثابتة
+    const shippingFee = country === 'الإمارات' ? 4 : 2 ; // رسوم الشحن الثابتة
 
     if (!Array.isArray(products) || products.length === 0) {
         return res.status(400).json({ error: "Invalid or empty products array" });
@@ -48,8 +48,8 @@ router.post("/create-checkout-session", async (req, res) => {
             client_reference_id: Date.now().toString(),
             mode: "payment",
             products: lineItems,
-            success_url: "http://localhost:5173/SuccessRedirect?client_reference_id="+Date.now().toString(),
-            cancel_url: "http://localhost:5173/cancel",
+            success_url: "https://www.henna-burgund.shop/SuccessRedirect?client_reference_id="+Date.now().toString(),
+            cancel_url: "https://www.henna-burgund.shop/cancel",   
         };
 
         const response = await axios.post(`${THAWANI_API_URL}/checkout/session`, data, {
@@ -60,7 +60,7 @@ router.post("/create-checkout-session", async (req, res) => {
         });
 
         const sessionId = response.data.data.session_id;
-        const paymentLink = `https://uatcheckout.thawani.om/pay/${sessionId}?key=${publish_key}`;
+        const paymentLink = `https://checkout.thawani.om/pay/${sessionId}?key=${publish_key}`;
 
         // حفظ الطلب في قاعدة البيانات مع جميع البيانات
         const order = new Order({
