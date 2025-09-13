@@ -4,7 +4,11 @@ const Reviews = require("../reviews/reviews.model");
 const verifyToken = require("../middleware/verifyToken");
 const verifyAdmin = require("../middleware/verifyAdmin");
 const router = express.Router();
-
+const multer = require('multer');
+const upload = multer({
+  storage: multer.memoryStorage(),       // أو استخدم diskStorage حسب حاجتك
+  limits: { fileSize: 5 * 1024 * 1024 }  // 5MB لكل ملف (عدّل حسب ما تريد)
+});
 // post a product
 const { uploadImages } = require("../utils/uploadImage");
 
@@ -24,35 +28,60 @@ router.post("/uploadImages", async (req, res) => {
 });
 
 // نقطة النهاية لإنشاء منتج
+const SUBCATEGORIES_MAP = {
+  'العناية بالبشرة': ['صوابين', 'مقشرات', 'تونر', 'ماسكات'],
+  'العناية بالشعر': ['شامبوهات', 'زيوت', 'أقنعة'],
+  'العناية بالشفاه': ['مرطب', 'محدد', 'مقشر'],
+  'العطور والبخور': [], // بدون أنواع
+  'إكسسوارات العناية': ['لوفة', 'فرش', 'أدوات'],
+};
+
 router.post("/create-product", async (req, res) => {
   try {
-    const { name, category, size, description,  oldPrice, price, image, author } = req.body;
+    let { name, category, subcategory, description, oldPrice, price, image, author } = req.body;
 
-    // التحقق من الحقول المطلوبة الأساسية
-    if (!name || !category || !description || !price || !image || !author) {
+    // تنظيف/تهيئة أولية
+    name = typeof name === 'string' ? name.trim() : name;
+    category = typeof category === 'string' ? category.trim() : category;
+    subcategory = typeof subcategory === 'string' ? subcategory.trim() : subcategory;
+    description = typeof description === 'string' ? description.trim() : description;
+    price = price !== undefined ? Number(price) : price;
+    oldPrice = oldPrice !== undefined && oldPrice !== '' ? Number(oldPrice) : undefined;
+
+    // التحقق من الحقول الأساسية
+    if (!name || !category || !description || price == null || !author) {
       return res.status(400).send({ message: "جميع الحقول المطلوبة يجب إرسالها" });
     }
 
-    // إذا كانت الفئة حناء بودر، نتحقق من وجود الحجم
-    if (category === 'حناء بودر' && !size) {
-      return res.status(400).send({ message: "يجب تحديد حجم الحناء" });
+    // التحقق من الصور (مصفوفة وبها عنصر واحد على الأقل)
+    if (!Array.isArray(image) || image.length === 0) {
+      return res.status(400).send({ message: "يجب إرسال صورة واحدة على الأقل" });
     }
 
-    // إنشاء كائن المنتج
+    // إذا كانت الفئة لها أنواع فرعية، يجب إرسال subcategory والتحقق من صحته ضمن الخريطة
+    const subcats = SUBCATEGORIES_MAP[category] || [];
+    if (subcats.length > 0) {
+      if (!subcategory) {
+        return res.status(400).send({ message: "يجب تحديد النوع (subcategory) لهذه الفئة" });
+      }
+      if (!subcats.includes(subcategory)) {
+        return res.status(400).send({ message: "النوع المرسل غير متوافق مع الفئة المختارة" });
+      }
+    } else {
+      // فئات بلا أنواع -> تجاهل أي subcategory مرسل
+      subcategory = undefined;
+    }
+
     const productData = {
-      name: category === 'حناء بودر' ? `${name} - ${size}` : name,
+      name,
       category,
+      subcategory, // قد تكون undefined إذا ما فيه أنواع
       description,
       price,
       oldPrice,
       image,
       author,
     };
-
-    // إضافة الحجم فقط لمنتجات الحناء
-    if (category === 'حناء بودر') {
-      productData.size = size;
-    }
 
     const newProduct = new Products(productData);
     const savedProduct = await newProduct.save();
@@ -142,65 +171,116 @@ router.get(["/:id", "/product/:id"], async (req, res) => {
 });
 
 // update a product
-const multer = require('multer');
-const upload = multer();
+router.patch(
+  "/update-product/:id",
+  verifyToken,
+  verifyAdmin,
+  upload.array('image'), 
+  async (req, res) => {
+    try {
+      const productId = req.params.id;
 
-router.patch("/update-product/:id", 
-    verifyToken, 
-    verifyAdmin, 
-    upload.single('image'),
-    async (req, res) => {
-        try {
-            const productId = req.params.id;
-            
-            let updateData = {
-                name: req.body.name,
-                category: req.body.category,
-                price: req.body.price,
-                oldPrice: req.body.oldPrice || null,
-                description: req.body.description,
-                size: req.body.size || null,
-                author: req.body.author
-            };
+      // قراءات أولية + تنظيف
+      let {
+        name,
+        category,
+        subcategory,   // 
+        price,
+        oldPrice,
+        description,
+        author,
+      } = req.body;
 
-            // التحقق من الحقول المطلوبة للتحديث
-            if (!updateData.name || !updateData.category || !updateData.price || !updateData.description) {
-                return res.status(400).send({ message: "جميع الحقول المطلوبة يجب إرسالها" });
-            }
+      name = typeof name === 'string' ? name.trim() : name;
+      category = typeof category === 'string' ? category.trim() : category;
+      subcategory = typeof subcategory === 'string' ? subcategory.trim() : subcategory;
+      description = typeof description === 'string' ? description.trim() : description;
+      price = price !== undefined ? Number(price) : price;
+      oldPrice = oldPrice !== undefined && oldPrice !== '' ? Number(oldPrice) : undefined;
 
-            // إذا كانت الفئة حناء بودر، نتحقق من وجود الحجم
-            if (updateData.category === 'حناء بودر' && !updateData.size) {
-                return res.status(400).send({ message: "يجب تحديد حجم الحناء" });
-            }
+      // تحقق أساسي
+      if (!name || !category || price == null || !description) {
+        return res.status(400).send({ message: "جميع الحقول المطلوبة يجب إرسالها" });
+      }
 
-            if (req.file) {
-                updateData.image = req.file.path;
-            }
-
-            const updatedProduct = await Products.findByIdAndUpdate(
-                productId,
-                { $set: updateData },
-                { new: true, runValidators: true }
-            );
-
-            if (!updatedProduct) {
-                return res.status(404).send({ message: "المنتج غير موجود" });
-            }
-
-            res.status(200).send({
-                message: "تم تحديث المنتج بنجاح",
-                product: updatedProduct,
-            });
-        } catch (error) {
-            console.error("خطأ في تحديث المنتج", error);
-            res.status(500).send({ 
-                message: "فشل تحديث المنتج",
-                error: error.message
-            });
+      // تحقق subcategory حسب الفئة
+      const subcats = SUBCATEGORIES_MAP[category] || [];
+      if (subcats.length > 0) {
+        if (!subcategory) {
+          return res.status(400).send({ message: "يجب تحديد النوع (subcategory) لهذه الفئة" });
         }
-    }
-);
+        if (!subcats.includes(subcategory)) {
+          return res.status(400).send({ message: "النوع المرسل غير متوافق مع الفئة المختارة" });
+        }
+      } else {
+        subcategory = undefined; // تجاهل أي قيمة مرسلة
+      }
 
+      // الصور:
+      // 1) الصور القديمة القادمة من الواجهة (كسلاسل روابط) عبر حقل existingImages[]
+      // 2) الصور الجديدة المرفوعة الآن عبر req.files
+      let existingImages = [];
+      // إذا أرسلها كـ existingImages أو existingImages[]
+      if (req.body.existingImages) {
+        if (Array.isArray(req.body.existingImages)) {
+          existingImages = req.body.existingImages.filter(Boolean);
+        } else if (typeof req.body.existingImages === 'string' && req.body.existingImages.trim()) {
+          // احتمال أرسلت كسلسلة JSON
+          try {
+            const parsed = JSON.parse(req.body.existingImages);
+            if (Array.isArray(parsed)) existingImages = parsed.filter(Boolean);
+          } catch {
+            existingImages = [req.body.existingImages.trim()];
+          }
+        }
+      }
+
+      // الصور الجديدة: اعمل من req.files مصفوفة مسارات/روابط حسب تخزينك
+      // (لو تستخدم Cloudinary/S3، بدّل هذه الخطوة بما يناسب)
+      const uploadedImages = Array.isArray(req.files) && req.files.length > 0
+        ? req.files.map(f => f.path || f.originalname) // عدّل كما يناسبك
+        : [];
+
+      const finalImages = [...existingImages, ...uploadedImages];
+
+      // بناء بيانات التحديث
+      const updateData = {
+        name,
+        category,
+        subcategory, // قد تكون undefined
+        price,
+        oldPrice,
+        description,
+        author, // إن أردت منع التغيير تجاهله هنا
+      };
+
+      if (finalImages.length > 0) {
+        updateData.image = finalImages;
+      }
+
+      const updatedProduct = await Products.findByIdAndUpdate(
+        productId,
+        { $set: updateData },
+        { new: true, runValidators: true }
+      );
+
+      if (!updatedProduct) {
+        return res.status(404).send({ message: "المنتج غير موجود" });
+      }
+
+      res.status(200).send({
+        message: "تم تحديث المنتج بنجاح",
+        product: updatedProduct,
+      });
+    } catch (error) {
+      console.error("خطأ في تحديث المنتج", error);
+      res.status(500).send({
+        message: "فشل تحديث المنتج",
+        error: error.message
+      });
+    }
+  }
+);
 // delete a product
 
 router.delete("/:id", async (req, res) => {
