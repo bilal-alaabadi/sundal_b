@@ -15,7 +15,8 @@ app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(
     cors({
-        origin:"https://alsandalbeauty.com",
+        origin:"https://www.alsandalbeauty.com",
+
         // origin: "https://www.royasow.store",//مال الفرونت اند
         credentials: true,
     })
@@ -23,7 +24,7 @@ app.use(
 
 // دعم طلبات OPTIONS (Preflight Requests)
 app.options('*', (req, res) => {
-    res.header('Access-Control-Allow-Origin', 'https://alsandalbeauty.com');
+    res.header('Access-Control-Allow-Origin', 'https://www.alsandalbeauty.com');
     res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
     res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
     res.send();
